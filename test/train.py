@@ -31,8 +31,6 @@ class TestPPTraining:
         seed_everything(42)
 
         self.args = args
-        # args.batch_size랑 ds_config.json에 있는 batch size들 맞춰야 할 것 같은데.
-        self.batch_size = args.batch_size
         self.total_step = args.total_step
         self.tokenizer = AutoTokenizer.from_pretrained(args.model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
@@ -64,15 +62,31 @@ class TestPPTraining:
             args=args,
             model=net,
             model_parameters=[p for p in net.parameters() if p.requires_grad],
-            optimizer=optimizer_ds,
-            training_data=dataset)
+            optimizer=optimizer_ds)
+
+        dataloader = DataLoader(
+        dataset,
+        batch_size=engine._config.train_batch_size,
+        num_workers=24,
+        drop_last=True,
+        collate_fn=collate_fn,
+        sampler=DistributedSampler(
+            dataset,
+            num_replicas=engine.grid.get_data_parallel_world_size(),
+            rank=engine.grid.get_data_parallel_rank(),
+            shuffle=True,
+            ),
+        )
+
+        dataloader = RepeatingLoader(dataloader)
+        train_iter = iter(dataloader)
 
         for _ in range(100):
-            engine.train_batch()
+            engine.train_batch(train_iter)
 
 
 def main(args):
-    # deepspeed.init_distributed(dist_backend=args.backend)
+    deepspeed.init_distributed(dist_backend=args.backend)
 
     test = TestPPTraining(args)
 
@@ -102,10 +116,7 @@ def get_args():
                         type=str,
                         default='nccl',
                         help='distributed backend')
-    parser.add_argument('--batch_size',
-                        type=int,
-                        default=2,
-                        )
+
     parser.add_argument('--seed', type=int, default=1138, help='PRNG seed')
     parser = deepspeed.add_config_arguments(parser)
     args = parser.parse_args()
@@ -119,10 +130,10 @@ if __name__ == "__main__":
         print(path.dirname(path.dirname(path.abspath(__file__))))
         sys.path.append((path.dirname(path.dirname(path.abspath(__file__)))))
         from model.GPT2Pipe import GPT2ModelPipe, GPT2ForSequenceClassificationPipe
-        from data import ClassificationDataset
+        from data import ClassificationDataset, collate_fn
     else:
         from ..model.GPT2Pipe import GPT2ModelPipe, GPT2ForSequenceClassificationPipe
-        from ..data import ClassificationDataset
+        from ..data import ClassificationDataset, collate_fn
 
     args = get_args()
     main(args)

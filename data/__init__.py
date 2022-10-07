@@ -30,3 +30,10 @@ class ClassificationDataset(Dataset):
             hypothesis=data_row[1],
             labels=data_row[2]
         )
+
+def collate_fn(batch):
+    input_ids = torch.tensor([list(b['input_ids']) for b in batch])
+    attention_masks = torch.tensor(
+        [list(b['attention_masks']) for b in batch])
+    labels = torch.tensor([b['labels'].as_py() for b in batch])
+    return (tuple([input_ids, attention_masks]), labels)
