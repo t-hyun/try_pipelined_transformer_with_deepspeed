@@ -600,5 +600,5 @@ class GPT2ForSequenceClassificationPipe(GPT2PreTrainedModel):
         else:
             loss = None
         torch.set_printoptions(precision=10)
-        print("loss_ds : ", loss)
+        print("DEBUG: loss_ds : ", loss)
         return loss
